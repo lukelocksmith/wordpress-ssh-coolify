@@ -1,0 +1,49 @@
+# WordPress Blueprint for Coolify - SIMPLE VERSION
+# Features: High PHP limits (no SSH)
+#
+# USAGE IN COOLIFY:
+# 1. Create new "Docker Compose" resource
+# 2. Paste this content
+# 3. Add "uploads.ini" file in Persistent Storages
+#
+services:
+  wordpress:
+    image: 'wordpress:latest'
+    volumes:
+      - 'wordpress-files:/var/www/html'
+      # PHP config - create this file in Coolify Persistent Storages
+      - 'uploads-ini:/usr/local/etc/php/conf.d/uploads.ini:ro'
+    environment:
+      - SERVICE_URL_WORDPRESS
+      - WORDPRESS_DB_HOST=mariadb
+      - WORDPRESS_DB_USER=$SERVICE_USER_WORDPRESS
+      - WORDPRESS_DB_PASSWORD=$SERVICE_PASSWORD_WORDPRESS
+      - WORDPRESS_DB_NAME=wordpress
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1"]
+      interval: 5s
+      timeout: 10s
+      retries: 10
+
+  mariadb:
+    image: 'mariadb:11'
+    volumes:
+      - 'mariadb-data:/var/lib/mysql'
+    environment:
+      - MYSQL_ROOT_PASSWORD=$SERVICE_PASSWORD_ROOT
+      - MYSQL_DATABASE=wordpress
+      - MYSQL_USER=$SERVICE_USER_WORDPRESS
+      - MYSQL_PASSWORD=$SERVICE_PASSWORD_WORDPRESS
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 20s
+      retries: 10
+
+volumes:
+  wordpress-files:
+  mariadb-data:
+  uploads-ini:
