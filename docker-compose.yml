@@ -9,9 +9,7 @@
 # Environment variables (set in Coolify):
 #   SSH_PASSWORD - password for SSH user "wp"
 #
-# SSH/SFTP connection:
-#   ssh wp@[TWOJA-DOMENA] -p 2222
-#   sftp -P 2222 wp@[TWOJA-DOMENA]
+# SSH: ssh wp@DOMENA -p 2222 (hasło: SSH_PASSWORD)
 #
 # WP-CLI (use Coolify Terminal, select wpcli container):
 #   wp plugin list --allow-root
