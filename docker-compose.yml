@@ -10,8 +10,9 @@
 #   SSH_PASSWORD - password for SSH user "wp"
 #
 # SSH/SFTP connection (file management):
-#   ssh wp@your-server-ip -p 2222
-#   sftp -P 2222 wp@your-server-ip
+#   ssh wp@YOUR-DOMAIN.com -p 2222
+#   sftp -P 2222 wp@YOUR-DOMAIN.com
+#   Example: ssh wp@kpd.important.is -p 2222
 #
 # WP-CLI (use Coolify Terminal, select wpcli container):
 #   wp plugin list --allow-root
