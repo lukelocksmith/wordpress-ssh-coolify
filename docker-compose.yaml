@@ -1,37 +1,70 @@
+# WordPress Blueprint for Coolify
+#
+# Features:
+# - Standard wordpress:latest image
+# - PHP limits configurable via uploads.ini (edit in Coolify Persistent Storage)
+# - WP-CLI container for command line management
+#
+# After deploy:
+# 1. Go to Persistent Storage in Coolify
+# 2. Find uploads.ini and edit PHP values
+# 3. Restart to apply changes
+#
+# WP-CLI usage (in Coolify Terminal for wpcli container):
+#   wp plugin list
+#   wp theme list
+#   wp core update
+
 services:
   wordpress:
-    build: .
+    image: wordpress:latest
     volumes:
-      - 'wordpress-files:/var/www/html'
+      - wordpress-files:/var/www/html
+      - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
     environment:
       - WORDPRESS_DB_HOST=mariadb
-      - WORDPRESS_DB_USER=$SERVICE_USER_WORDPRESS
-      - WORDPRESS_DB_PASSWORD=$SERVICE_PASSWORD_WORDPRESS
-      - WORDPRESS_DB_NAME=wordpress
+      - WORDPRESS_DB_USER=${SERVICE_USER_WORDPRESS:-wordpress}
+      - WORDPRESS_DB_PASSWORD=${SERVICE_PASSWORD_WORDPRESS}
+      - WORDPRESS_DB_NAME=${WORDPRESS_DB_NAME:-wordpress}
     depends_on:
       mariadb:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      test: ["CMD-SHELL", "curl -f http://localhost:80/ || curl -f http://localhost:80/wp-admin/install.php"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 30s
 
   mariadb:
-    image: 'mariadb:11'
+    image: mariadb:11
     volumes:
-      - 'mariadb-data:/var/lib/mysql'
+      - mariadb-data:/var/lib/mysql
     environment:
-      - MYSQL_ROOT_PASSWORD=$SERVICE_PASSWORD_ROOT
-      - MYSQL_DATABASE=wordpress
-      - MYSQL_USER=$SERVICE_USER_WORDPRESS
-      - MYSQL_PASSWORD=$SERVICE_PASSWORD_WORDPRESS
+      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
+      - MYSQL_DATABASE=${WORDPRESS_DB_NAME:-wordpress}
+      - MYSQL_USER=${SERVICE_USER_WORDPRESS:-wordpress}
+      - MYSQL_PASSWORD=${SERVICE_PASSWORD_WORDPRESS}
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 5s
       timeout: 20s
       retries: 10
+
+  wpcli:
+    image: wordpress:cli
+    volumes:
+      - wordpress-files:/var/www/html
+    environment:
+      - WORDPRESS_DB_HOST=mariadb
+      - WORDPRESS_DB_USER=${SERVICE_USER_WORDPRESS:-wordpress}
+      - WORDPRESS_DB_PASSWORD=${SERVICE_PASSWORD_WORDPRESS}
+      - WORDPRESS_DB_NAME=${WORDPRESS_DB_NAME:-wordpress}
+    depends_on:
+      - wordpress
+      - mariadb
+    entrypoint: ["sleep", "infinity"]
+    user: "33:33"
 
 volumes:
   wordpress-files:
