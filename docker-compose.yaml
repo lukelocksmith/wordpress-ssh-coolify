@@ -2,13 +2,16 @@
 #
 # Features:
 # - Standard wordpress:latest image
-# - PHP limits configurable via uploads.ini (edit in Coolify Persistent Storage)
+# - PHP limits configurable via environment variables
 # - WP-CLI container for command line management
 #
-# After deploy:
-# 1. Go to Persistent Storage in Coolify
-# 2. Find uploads.ini and edit PHP values
-# 3. Restart to apply changes
+# Environment variables (set in Coolify):
+#   PHP_UPLOAD_MAX_FILESIZE (default: 512M)
+#   PHP_POST_MAX_SIZE (default: 512M)
+#   PHP_MEMORY_LIMIT (default: 512M)
+#   PHP_MAX_EXECUTION_TIME (default: 600)
+#   PHP_MAX_INPUT_TIME (default: 600)
+#   PHP_MAX_INPUT_VARS (default: 10000)
 #
 # WP-CLI usage (in Coolify Terminal for wpcli container):
 #   wp plugin list
@@ -20,7 +23,17 @@ services:
     image: wordpress:latest
     volumes:
       - wordpress-files:/var/www/html
-      - ./uploads.ini:/usr/local/etc/php/conf.d/uploads.ini:ro
+      - type: bind
+        source: ./uploads.ini
+        target: /usr/local/etc/php/conf.d/uploads.ini
+        content: |
+          file_uploads = On
+          upload_max_filesize = ${PHP_UPLOAD_MAX_FILESIZE:-512M}
+          post_max_size = ${PHP_POST_MAX_SIZE:-512M}
+          memory_limit = ${PHP_MEMORY_LIMIT:-512M}
+          max_execution_time = ${PHP_MAX_EXECUTION_TIME:-600}
+          max_input_time = ${PHP_MAX_INPUT_TIME:-600}
+          max_input_vars = ${PHP_MAX_INPUT_VARS:-10000}
     environment:
       - WORDPRESS_DB_HOST=mariadb
       - WORDPRESS_DB_USER=${SERVICE_USER_WORDPRESS:-wordpress}
@@ -30,11 +43,11 @@ services:
       mariadb:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:80/ || curl -f http://localhost:80/wp-admin/install.php"]
+      test: ["CMD-SHELL", "curl -fL http://localhost:80/ -o /dev/null -s -w '%{http_code}' | grep -E '^(200|301|302|303)$'"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 60s
 
   mariadb:
     image: mariadb:11
@@ -61,9 +74,11 @@ services:
       - WORDPRESS_DB_PASSWORD=${SERVICE_PASSWORD_WORDPRESS}
       - WORDPRESS_DB_NAME=${WORDPRESS_DB_NAME:-wordpress}
     depends_on:
-      - wordpress
-      - mariadb
-    entrypoint: ["sleep", "infinity"]
+      wordpress:
+        condition: service_healthy
+      mariadb:
+        condition: service_healthy
+    command: ["tail", "-f", "/dev/null"]
     user: "33:33"
 
 volumes:
