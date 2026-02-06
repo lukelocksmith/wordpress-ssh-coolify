@@ -2,18 +2,13 @@
 #
 # Features:
 # - Standard wordpress:latest image
-# - PHP limits configurable via environment variables
+# - PHP limits in uploads.ini (edit values below and redeploy)
 # - WP-CLI container for command line management
 #
-# Environment variables (set in Coolify):
-#   PHP_UPLOAD_MAX_FILESIZE (default: 512M)
-#   PHP_POST_MAX_SIZE (default: 512M)
-#   PHP_MEMORY_LIMIT (default: 512M)
-#   PHP_MAX_EXECUTION_TIME (default: 600)
-#   PHP_MAX_INPUT_TIME (default: 600)
-#   PHP_MAX_INPUT_VARS (default: 10000)
+# To change PHP limits:
+#   Edit the 'content:' section below and redeploy
 #
-# WP-CLI usage (in Coolify Terminal for wpcli container):
+# WP-CLI usage (in Coolify Terminal, select wpcli container):
 #   wp plugin list
 #   wp theme list
 #   wp core update
@@ -28,22 +23,22 @@ services:
         target: /usr/local/etc/php/conf.d/uploads.ini
         content: |
           file_uploads = On
-          upload_max_filesize = ${PHP_UPLOAD_MAX_FILESIZE:-512M}
-          post_max_size = ${PHP_POST_MAX_SIZE:-512M}
-          memory_limit = ${PHP_MEMORY_LIMIT:-512M}
-          max_execution_time = ${PHP_MAX_EXECUTION_TIME:-600}
-          max_input_time = ${PHP_MAX_INPUT_TIME:-600}
-          max_input_vars = ${PHP_MAX_INPUT_VARS:-10000}
+          upload_max_filesize = 512M
+          post_max_size = 512M
+          memory_limit = 512M
+          max_execution_time = 600
+          max_input_time = 600
+          max_input_vars = 10000
     environment:
       - WORDPRESS_DB_HOST=mariadb
-      - WORDPRESS_DB_USER=${SERVICE_USER_WORDPRESS:-wordpress}
-      - WORDPRESS_DB_PASSWORD=${SERVICE_PASSWORD_WORDPRESS}
-      - WORDPRESS_DB_NAME=${WORDPRESS_DB_NAME:-wordpress}
+      - WORDPRESS_DB_USER=$SERVICE_USER_WORDPRESS
+      - WORDPRESS_DB_PASSWORD=$SERVICE_PASSWORD_WORDPRESS
+      - WORDPRESS_DB_NAME=wordpress
     depends_on:
       mariadb:
         condition: service_healthy
     healthcheck:
-      test: ["CMD-SHELL", "curl -fL http://localhost:80/ -o /dev/null -s -w '%{http_code}' | grep -E '^(200|301|302|303)$'"]
+      test: ["CMD-SHELL", "curl -sL http://localhost:80/ -o /dev/null -w '%{http_code}' | grep -qE '^[23]'"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -54,10 +49,10 @@ services:
     volumes:
       - mariadb-data:/var/lib/mysql
     environment:
-      - MYSQL_ROOT_PASSWORD=${SERVICE_PASSWORD_ROOT}
-      - MYSQL_DATABASE=${WORDPRESS_DB_NAME:-wordpress}
-      - MYSQL_USER=${SERVICE_USER_WORDPRESS:-wordpress}
-      - MYSQL_PASSWORD=${SERVICE_PASSWORD_WORDPRESS}
+      - MYSQL_ROOT_PASSWORD=$SERVICE_PASSWORD_ROOT
+      - MYSQL_DATABASE=wordpress
+      - MYSQL_USER=$SERVICE_USER_WORDPRESS
+      - MYSQL_PASSWORD=$SERVICE_PASSWORD_WORDPRESS
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 5s
@@ -70,9 +65,9 @@ services:
       - wordpress-files:/var/www/html
     environment:
       - WORDPRESS_DB_HOST=mariadb
-      - WORDPRESS_DB_USER=${SERVICE_USER_WORDPRESS:-wordpress}
-      - WORDPRESS_DB_PASSWORD=${SERVICE_PASSWORD_WORDPRESS}
-      - WORDPRESS_DB_NAME=${WORDPRESS_DB_NAME:-wordpress}
+      - WORDPRESS_DB_USER=$SERVICE_USER_WORDPRESS
+      - WORDPRESS_DB_PASSWORD=$SERVICE_PASSWORD_WORDPRESS
+      - WORDPRESS_DB_NAME=wordpress
     depends_on:
       wordpress:
         condition: service_healthy
