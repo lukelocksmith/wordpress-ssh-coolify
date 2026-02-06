@@ -2,15 +2,18 @@
 #
 # Features:
 # - Standard wordpress:latest image
-# - PHP limits in uploads.ini (edit values below and redeploy)
-# - SSH access with WP-CLI (port 2222)
+# - PHP limits configurable (edit content below)
+# - SSH/SFTP access for file management (port 2222)
+# - WP-CLI via Coolify Terminal (wpcli container)
 #
-# SSH connection:
-#   ssh wp@your-domain.com -p 2222
-#   Password: set SSH_PASSWORD in Coolify environment variables
+# Environment variables (set in Coolify):
+#   SSH_PASSWORD - password for SSH user "wp"
 #
-# WP-CLI via SSH:
+# SSH/SFTP connection (file management):
 #   ssh wp@your-domain.com -p 2222
+#   sftp -P 2222 wp@your-domain.com
+#
+# WP-CLI (use Coolify Terminal, select wpcli container):
 #   wp plugin list
 #   wp theme list
 
@@ -69,24 +72,27 @@ services:
       - USER_NAME=wp
       - USER_PASSWORD=$SSH_PASSWORD
       - PASSWORD_ACCESS=true
-      - SUDO_ACCESS=true
     volumes:
       - wordpress-files:/var/www/html
-      - type: bind
-        source: ./install-wpcli.sh
-        target: /custom-cont-init.d/install-wpcli.sh
-        content: |
-          #!/bin/bash
-          curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
-          chmod +x wp-cli.phar
-          mv wp-cli.phar /usr/local/bin/wp
-          apk add --no-cache php83 php83-phar php83-mbstring php83-iconv php83-openssl php83-curl php83-mysqli php83-json php83-xml
-          ln -sf /usr/bin/php83 /usr/bin/php
     ports:
       - "2222:2222"
+
+  wpcli:
+    image: wordpress:cli
+    volumes:
+      - wordpress-files:/var/www/html
+    environment:
+      - WORDPRESS_DB_HOST=mariadb
+      - WORDPRESS_DB_USER=$SERVICE_USER_WORDPRESS
+      - WORDPRESS_DB_PASSWORD=$SERVICE_PASSWORD_WORDPRESS
+      - WORDPRESS_DB_NAME=wordpress
     depends_on:
       wordpress:
         condition: service_healthy
+      mariadb:
+        condition: service_healthy
+    command: ["tail", "-f", "/dev/null"]
+    user: "33:33"
 
 volumes:
   wordpress-files:
