@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # WordPress User Setup Script for Coolify
-# Creates system user with SSH/SFTP access to WordPress files
+# Creates system user with SSH/SFTP access to WordPress files + WP-CLI
 #
 # Usage: ./setup-wordpress-user.sh <username> <volume-prefix>
 # Example: ./setup-wordpress-user.sh natanek j4sos8ccooskswk04c08sc00
@@ -50,47 +50,49 @@ echo "Volume path: $VOLUME_PATH"
 # Generate random password
 PASSWORD=$(openssl rand -base64 12 | tr -d '/+=' | head -c 16)
 
-# Create user with UID 33 (www-data) if doesn't exist
+# Create user with www-data group (GID 33) for WordPress file access
 if id "$USERNAME" &>/dev/null; then
     echo -e "${YELLOW}User $USERNAME already exists, updating...${NC}"
-    usermod -d "$VOLUME_PATH" -s /bin/bash "$USERNAME"
+    usermod -d "$VOLUME_PATH" -s /bin/bash -g 33 "$USERNAME"
 else
     echo "Creating user $USERNAME..."
-    useradd -u 33 -o -g 33 -d "$VOLUME_PATH" -s /bin/bash -M "$USERNAME"
+    useradd -g 33 -d "$VOLUME_PATH" -s /bin/bash -M "$USERNAME"
 fi
+
+# Add to docker group for WP-CLI access
+usermod -aG docker "$USERNAME"
 
 # Set password
 echo "${USERNAME}:${PASSWORD}" | chpasswd
 
-# Ensure proper permissions on volume path
+# Ensure proper permissions on Docker volume paths
 echo "Setting permissions..."
-chmod 755 /var/lib/docker/volumes
-chmod 755 "/var/lib/docker/volumes/${VOLUME_PREFIX}_wordpress-files"
-chmod 755 "$VOLUME_PATH"
+chmod o+x /var/lib/docker
+chmod o+x /var/lib/docker/volumes
+chmod o+x "/var/lib/docker/volumes/${VOLUME_PREFIX}_wordpress-files"
+chmod o+x "$VOLUME_PATH"
 
 # Create WP-CLI wrapper script for this user
 echo "Creating WP-CLI wrapper..."
-cat > "$WP_CLI_PATH" << 'WPCLI_SCRIPT'
+cat > "$WP_CLI_PATH" << WPCLI_SCRIPT
 #!/bin/bash
-# WP-CLI wrapper - runs inside WordPress container
+# WP-CLI wrapper - runs inside WP-CLI container
 
-VOLUME_PREFIX="__VOLUME_PREFIX__"
-CONTAINER=$(docker ps --filter "name=${VOLUME_PREFIX}" --filter "ancestor=wordpress:latest" -q | head -1)
+VOLUME_PREFIX="${VOLUME_PREFIX}"
+CONTAINER=\$(docker ps --filter "name=\${VOLUME_PREFIX}" --filter "ancestor=wordpress:cli" -q | head -1)
 
-if [ -z "$CONTAINER" ]; then
-    echo "Error: WordPress container not running"
+if [ -z "\$CONTAINER" ]; then
+    echo "Error: WP-CLI container not running"
     exit 1
 fi
 
 # Run WP-CLI command inside container
-docker exec -u 33 "$CONTAINER" wp "$@"
+docker exec "\$CONTAINER" wp --allow-root "\$@"
 WPCLI_SCRIPT
 
-# Replace placeholder with actual volume prefix
-sed -i "s/__VOLUME_PREFIX__/${VOLUME_PREFIX}/" "$WP_CLI_PATH"
 chmod +x "$WP_CLI_PATH"
 
-# Create symlink so 'wp' command works for this user
+# Create user bin directory and symlink
 USER_BIN_PATH="${VOLUME_PATH}/.local/bin"
 mkdir -p "$USER_BIN_PATH"
 ln -sf "$WP_CLI_PATH" "${USER_BIN_PATH}/wp"
@@ -98,9 +100,11 @@ chown -R 33:33 "${VOLUME_PATH}/.local"
 
 # Add .local/bin to PATH in .bashrc
 BASHRC="${VOLUME_PATH}/.bashrc"
-if [ ! -f "$BASHRC" ] || ! grep -q ".local/bin" "$BASHRC"; then
-    echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$BASHRC"
+if [ ! -f "$BASHRC" ]; then
+    echo 'export PATH="$HOME/.local/bin:$PATH"' > "$BASHRC"
     chown 33:33 "$BASHRC"
+elif ! grep -q ".local/bin" "$BASHRC"; then
+    echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$BASHRC"
 fi
 
 # Output summary
@@ -120,5 +124,6 @@ echo ""
 echo "WP-CLI (after SSH login):"
 echo -e "  ${YELLOW}wp plugin list${NC}"
 echo -e "  ${YELLOW}wp theme list${NC}"
+echo -e "  ${YELLOW}wp core version${NC}"
 echo ""
 echo -e "${GREEN}========================================${NC}"
