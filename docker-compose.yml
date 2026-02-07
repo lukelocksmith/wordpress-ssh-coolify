@@ -61,6 +61,7 @@ services:
 
   wpcli:
     image: wordpress:cli
+    init: true  # Fixes zombie process issue
     volumes:
       - wordpress-files:/var/www/html
     environment:
